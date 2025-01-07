@@ -55,7 +55,7 @@ def process_video(videoid, lang):
 
     try:
         # First request: Get subtitle info (without downloading them)
-        cmd = f"yt-dlp --list-subs --skip-download {url} --cookies cookies_1.txt"
+        cmd = f"yt-dlp --list-subs --skip-download {url} --cookies cookies.txt"
         stdout, stderr = run_command(cmd)
         auto_lang, manu_lang = get_subtitle_language(stdout)
         has_subtitle = lang in manu_lang and len(manu_lang) < 5
@@ -63,7 +63,7 @@ def process_video(videoid, lang):
 
         # If subtitle exists or we need metadata, make second request to fetch metadata
         if has_subtitle:  # Always get metadata
-            metadata_cmd = f"yt-dlp -j {url} --cookies cookies_1.txt"
+            metadata_cmd = f"yt-dlp -j {url} --cookies cookies.txt"
             stdout, stderr = run_command(metadata_cmd)
             try:
                 import json
