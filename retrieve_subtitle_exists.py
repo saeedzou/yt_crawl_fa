@@ -33,7 +33,7 @@ def run_command(cmd):
         raise subprocess.CalledProcessError(process.returncode, cmd, stdout, stderr)
     return stdout, stderr
 
-def process_video(videoid, lang, outdir):
+def process_video(videoid, lang):
     """Process a single video to get metadata and subtitle info (without downloading subtitles)."""
     url = make_video_url(videoid)
     entry = {
@@ -91,7 +91,7 @@ def process_video(videoid, lang, outdir):
     return entry
 
 def retrieve_subtitle_exists(lang, fn_videoid, outdir="sub", wait_sec=0.2, fn_checkpoint=None):
-    fn_sub = Path(outdir) / lang / f"{Path(fn_videoid).stem}.csv"
+    fn_sub = Path(outdir) / f"{Path(fn_videoid).stem}.csv"
     fn_sub.parent.mkdir(parents=True, exist_ok=True)
 
     # Load checkpoint if provided
@@ -123,7 +123,7 @@ def retrieve_subtitle_exists(lang, fn_videoid, outdir="sub", wait_sec=0.2, fn_ch
             continue
 
         # Call process_video without download_subs, as we are not downloading subtitles
-        entry = process_video(videoid, lang, outdir)
+        entry = process_video(videoid, lang)
         subtitle_exists.append(entry)
 
         # Sleep to avoid overloading requests
