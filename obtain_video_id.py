@@ -73,4 +73,4 @@ if __name__ == "__main__":
         args.batch_number,
         args.processes
     )
-    print(f"Saved {args.lang.upper()} video IDs to {filename}.")
+    print(f"Saved video IDs to {filename}.")
