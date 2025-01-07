@@ -2,6 +2,7 @@ import time
 import csv
 import argparse
 import sys
+import random
 import subprocess
 from pathlib import Path
 from util import make_video_url, get_subtitle_language
@@ -109,6 +110,7 @@ def retrieve_subtitle_exists(lang, fn_videoid, outdir="sub", wait_sec=0.2, fn_ch
         reader = csv.DictReader(f)
         for row in reader:
             video_ids.append(row["video_id"])
+    random.shuffle(video_ids)
 
     # Define fieldnames for CSV
     fieldnames = ["videoid", "videourl", "sub", "title", 
