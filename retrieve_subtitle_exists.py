@@ -38,7 +38,7 @@ def run_command(cmd):
 def count_punctuations(text):
     """Count both English and Persian punctuations in text."""
     # Combined English and Persian punctuation marks
-    punctuation_marks = r'[،؛؟!\.,:;\?\!\(\)\[\]\{\}"""''\-—–]'
+    punctuation_marks = r'[،؛؟!\.,:;\?\!]'
     matches = re.findall(punctuation_marks, text)
     return len(matches)
 
