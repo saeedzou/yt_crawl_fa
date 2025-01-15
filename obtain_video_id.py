@@ -38,7 +38,7 @@ def process_word(word):
 
 
 def obtain_video_id(fn_word, outdir, batch_size, batch_number, processes):
-    fn_videoid = Path(outdir) / f"{Path(fn_word).stem}_{batch_number}.csv"
+    fn_videoid = Path(outdir) / f"{Path(fn_word).stem}.csv"
     fn_videoid.parent.mkdir(parents=True, exist_ok=True)
 
     # Read the word list and slice the batch
