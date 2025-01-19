@@ -38,7 +38,7 @@ def run_command(cmd):
 def count_punctuations(text):
     """Count both English and Persian punctuations in text."""
     # Combined English and Persian punctuation marks
-    punctuation_marks = r'[،؛؟!\.:]'
+    punctuation_marks = r'[،؛؟!:]|(?<!\d)\.(?!\d)'
     matches = re.findall(punctuation_marks, text)
     return len(matches)
 
@@ -77,7 +77,7 @@ def extract_text_from_subtitle(subtitle_file):
     text = ""
     try:
         with open(subtitle_file, 'r', encoding='utf-8') as f:
-            lines = f.readlines()
+            lines = f.readlines()[3:]
             for line in lines:
                 # Skip timeline patterns and empty lines
                 if not line.strip():
@@ -94,7 +94,7 @@ def extract_text_from_subtitle(subtitle_file):
         return ""
     return text.strip()
 
-def process_video(videoid, lang):
+def process_video(videoid, query_phrase, lang):
     """Process a single video to get metadata, download Persian subtitles, and analyze punctuation."""
     url = make_video_url(videoid)
     entry = {
@@ -103,6 +103,7 @@ def process_video(videoid, lang):
         "good_sub": "False",
         "sub": "False",
         "title": "",
+        "query_phrase": query_phrase,
         "channel": "",
         "channel_id": "",
         "channel_url": "",
@@ -189,22 +190,24 @@ def retrieve_subtitle_exists(lang, fn_videoid, outdir="sub", wait_sec=0.2, fn_ch
     with open(fn_videoid, "r") as f:
         reader = csv.DictReader(f)
         for row in reader:
-            video_ids.append(row["video_id"])
+            video_ids.append((row["video_id"], row['word']))
     random.shuffle(video_ids)
 
     # Define fieldnames for CSV
     fieldnames = ["videoid", "videourl", "good_sub", "sub", "title", 
-                 "channel", "channel_id", "channel_url", "channel_follower_count", 
-                 "upload_date", "duration", "view_count", "categories", "like_count",
-                 "punctuation_count", "subtitle_duration", "subtitle_coverage"]  # Added new fields
+                  "query_phrase",
+                 "channel", "channel_id", "channel_url",
+                 "punctuation_count", "subtitle_duration",
+                 "channel_follower_count", "upload_date", "duration", 
+                 "view_count", "categories", "like_count", "subtitle_coverage"]
 
 
     # Process videos
-    for videoid in tqdm(video_ids):
+    for videoid, query_phrase in tqdm(video_ids):
         if videoid in processed_videoids:
             continue
 
-        entry = process_video(videoid, lang)
+        entry = process_video(videoid, query_phrase, lang)
         subtitle_exists.append(entry)
 
         if wait_sec > 0.01:
