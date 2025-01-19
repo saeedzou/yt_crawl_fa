@@ -58,7 +58,7 @@ def calculate_subtitle_duration(subtitle_file):
     total_duration = 0
     try:
         with open(subtitle_file, 'r', encoding='utf-8') as f:
-            lines = f.readlines()
+            lines = f.readlines()[3:]
             for line in lines:
                 if '-->' in line:
                     # Extract start and end times
