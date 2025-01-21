@@ -6,6 +6,7 @@ import re
 import json
 import random
 import subprocess
+import string
 from pathlib import Path
 from util import make_video_url, get_subtitle_language
 from tqdm import tqdm
@@ -34,6 +35,18 @@ def run_command(cmd):
     if process.returncode != 0:
         raise subprocess.CalledProcessError(process.returncode, cmd, stdout, stderr)
     return stdout, stderr
+
+def is_english(text):
+    """Returns True if the text contains more than 50% English alphabet characters."""
+    # Count English alphabet characters
+    english_chars = sum(1 for char in text if char in string.ascii_letters)
+    # Total characters in the text
+    total_chars = len(text)
+    # Avoid division by zero
+    if total_chars == 0:
+        return False
+    # Calculate percentage of English characters
+    return (english_chars / total_chars) > 0.5
 
 def count_punctuations(text):
     """Count both English and Persian punctuations in text."""
@@ -143,7 +156,7 @@ def process_video(videoid, query_phrase, lang):
                 # Calculate total subtitle duration
                 subtitle_duration = calculate_subtitle_duration(subtitle_filename)
                 entry["subtitle_duration"] = round(subtitle_duration, 2)  # Round to 2 decimal places
-                if entry["subtitle_duration"] > 600 and punct_count > 5:
+                if entry["subtitle_duration"] > 600 and punct_count > 5 and not is_english(subtitle_text):
                     entry["good_sub"] = str(True)
                     # Get metadata
                     metadata_cmd = f"yt-dlp -j {url} --cookies cookies.txt"
