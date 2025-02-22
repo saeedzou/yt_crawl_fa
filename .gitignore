@@ -1,0 +1,12 @@
+metadatas/*
+videoid/*
+old/*
+filtered/*
+*.pyc
+channels.csv
+channel_selection.ipynb
+filtered_normalized_fawiki.txt
+merge_metadatas.ipynb
+new_selected_channels.csv
+cookies.txt
+selected_channels.csv
