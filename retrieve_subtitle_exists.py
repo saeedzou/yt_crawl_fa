@@ -156,7 +156,7 @@ def process_video(videoid, query_phrase, lang):
                 # Calculate total subtitle duration
                 subtitle_duration = calculate_subtitle_duration(subtitle_filename)
                 entry["subtitle_duration"] = round(subtitle_duration, 2)  # Round to 2 decimal places
-                if entry["subtitle_duration"] > 600 and punct_count > 5 and not is_english(subtitle_text):
+                if entry["subtitle_duration"] > 10 and punct_count > 5 and not is_english(subtitle_text):
                     entry["good_sub"] = str(True)
                     # Get metadata
                     metadata_cmd = f"yt-dlp -j {url} --cookies cookies.txt"
