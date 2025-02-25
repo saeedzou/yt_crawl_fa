@@ -299,7 +299,7 @@ def process_video(videoid, query_phrase, lang, processed_channels):
                 # Calculate total subtitle duration
                 subtitle_duration = calculate_subtitle_duration(subtitle_filename)
                 entry["subtitle_duration"] = round(subtitle_duration, 2)  # Round to 2 decimal places
-                if (entry["subtitle_duration"] > 10) and (not is_english(subtitle_text)) and (metadata.get('channel_id') not in processed_channels) and (common_punct > 5 or other_punct > 1):
+                if (entry["subtitle_duration"] > 10) and (not is_english(subtitle_text)) and (common_punct > 5 or other_punct > 1):
                     print(f"Downloading and processing audio for video {videoid}")
                     print(url)
                     audio_file = download_video(videoid)
