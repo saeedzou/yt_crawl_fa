@@ -107,12 +107,15 @@ def is_english(text):
     # Calculate percentage of English characters
     return (english_chars / total_chars) > 0.5
 
-def count_punctuations(text):
-    """Count both English and Persian punctuations in text."""
-    # Combined English and Persian punctuation marks
-    # punctuation_marks = r'[،؛؟!:]|(?<!\d)\.(?!\d)'
-    punctuation_marks = r'[،؛؟!:]'
-    matches = re.findall(punctuation_marks, text)
+def count_common_punctuations(text):
+    """Count common punctuation marks in text."""
+    common_punctuation_marks = r'[؟،]'
+    matches = re.findall(common_punctuation_marks, text)
+    return len(matches)
+
+def count_other_punctuations(text):
+    other_punctuation_marks = r'[!؛:]'
+    matches = re.findall(other_punctuation_marks, text)
     return len(matches)
 
 def parse_timestamp(timestamp):
@@ -288,14 +291,15 @@ def process_video(videoid, query_phrase, lang, processed_channels):
             # Extract text and count punctuations
             if Path(subtitle_filename).exists():
                 subtitle_text = extract_text_from_subtitle(subtitle_filename)
-                punct_count = count_punctuations(subtitle_text)
+                common_punct = count_common_punctuations(subtitle_text)
+                other_punct = count_other_punctuations(subtitle_text)
+                punct_count = common_punct + other_punct
                 entry["punctuation_count"] = punct_count
                 
                 # Calculate total subtitle duration
                 subtitle_duration = calculate_subtitle_duration(subtitle_filename)
                 entry["subtitle_duration"] = round(subtitle_duration, 2)  # Round to 2 decimal places
-                if entry["subtitle_duration"] > 10 and punct_count > 5 and not is_english(subtitle_text) and metadata.get('channel_id') not in processed_channels:
-                    # entry["good_sub"] = str(True)
+                if (entry["subtitle_duration"] > 10) and (not is_english(subtitle_text)) and (metadata.get('channel_id') not in processed_channels) and (common_punct > 5 or other_punct > 1):
                     print(f"Downloading and processing audio for video {videoid}")
                     print(url)
                     audio_file = download_video(videoid)
