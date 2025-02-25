@@ -304,6 +304,7 @@ def process_video(videoid, query_phrase, lang, processed_channels):
                     print(url)
                     audio_file = download_video(videoid)
                     auto_transcription = transcribe_audio(audio_file, model, vad_model)
+                    auto_transcription = re.sub(' +', ' ', auto_transcription)
                     manual_transcription = extract_subtitle_text(subtitle_filename)
                     manual_transcription = re.sub(' +', ' ', manual_transcription)
                     word_error_rate = wer(manual_transcription, auto_transcription)
