@@ -84,7 +84,7 @@ def transcribe_audio(file_path, model, vad_model):
         transcriptions.append(transcription)
     return ' '.join(transcriptions)
 
-def load_model(model_path:str="/content/yt_crawl_fa/Speech_To_Text_Finetuning_pretrained_stt_en_fastconformer_hybrid_large_pc_dataset_v30.nemo", checkpoint_path='/content/yt_crawl_fa/model-epoch=49-val_wer=0.06.ckpt'):
+def load_model(model_path:str="/content/drive/MyDrive/Speech_To_Text_Finetuning_pretrained_stt_en_fastconformer_hybrid_large_pc_dataset_v30.nemo", checkpoint_path='/content/drive/MyDrive/model-epoch=49-val_wer=0.06.ckpt'):
     model = ASRModel.restore_from(restore_path=model_path)
     if checkpoint_path is not None:
         checkpoint = torch.load(checkpoint_path, map_location=torch.device('cpu'))
