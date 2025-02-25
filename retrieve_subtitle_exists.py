@@ -3,13 +3,23 @@ import csv
 import argparse
 import sys
 import re
-import json
 import random
+import os
+import yt_dlp
+import torch
 import subprocess
 import string
+import re
+import librosa
+import silero_vad
+import numpy as np
 from pathlib import Path
-from util import make_video_url, get_subtitle_language
+from jiwer import wer, cer
+from parsnorm import ParsNorm
+from util import make_video_url
+from nemo.collections.asr.models import ASRModel
 from tqdm import tqdm
+
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -22,19 +32,68 @@ def parse_args():
     parser.add_argument("--checkpoint", type=str, default=None, help="filename of list checkpoint (for restart retrieving)")
     return parser.parse_args(sys.argv[1:])
 
-def run_command(cmd):
-    """Run command and return stdout, handling both stdout and stderr."""
-    process = subprocess.Popen(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        shell=True,
-        universal_newlines=True
+def load_audio(file_path):
+    waveform, sample_rate = librosa.load(file_path, sr=16000)
+    # convert to mono
+    waveform = librosa.to_mono(waveform)
+    # Normalize and convert to float32
+    if waveform.dtype == 'int16':
+        waveform = waveform.astype('float32') / 32768.0
+    elif waveform.dtype == 'int32':
+        waveform = waveform.astype('float32') / 2147483648.0
+    elif waveform.dtype == 'uint8':
+        waveform = (waveform.astype('float32') - 128) / 128.0
+    else:
+        # If already float32, ensure no further normalization is done
+        waveform = waveform.astype('float32')
+
+    return waveform, sample_rate
+
+def segment_audio_with_vad(file_path, vad_model):
+    waveform, sample_rate = load_audio(file_path)
+
+    # Get speech timestamps
+    speech_timestamps = silero_vad.get_speech_timestamps(
+        waveform,
+        vad_model,
+        sampling_rate=sample_rate,
+        min_speech_duration_ms=250,  # Minimum speech duration in ms
+        min_silence_duration_ms=100  # Minimum silence duration in ms
     )
-    stdout, stderr = process.communicate()
-    if process.returncode != 0:
-        raise subprocess.CalledProcessError(process.returncode, cmd, stdout, stderr)
-    return stdout, stderr
+
+    # Extract speech segments
+    speech_segments = []
+    for segment in speech_timestamps:
+        start = segment['start']
+        end = segment['end']
+        speech_segment = waveform[start:end]
+        speech_segments.append(speech_segment)
+
+    return speech_segments
+
+def transcribe_chunk(chunk, model):
+    transcription = model.transcribe([chunk], batch_size=1, verbose=False)
+    return transcription[1][0]
+
+def transcribe_audio(file_path, model, vad_model):
+    # chunks = chunk_audio(file_path)
+    chunks = segment_audio_with_vad(file_path, vad_model)
+    transcriptions = []
+    for chunk in chunks:
+        transcription = transcribe_chunk(chunk, model)
+        transcriptions.append(transcription)
+    return ' '.join(transcriptions)
+
+def load_model(model_path:str="/content/yt_crawl_fa/Speech_To_Text_Finetuning_pretrained_stt_en_fastconformer_hybrid_large_pc_dataset_v30.nemo", checkpoint_path='/content/yt_crawl_fa/model-epoch=49-val_wer=0.06.ckpt'):
+    model = ASRModel.restore_from(restore_path=model_path)
+    if checkpoint_path is not None:
+        checkpoint = torch.load(checkpoint_path, map_location=torch.device('cpu'))
+        model.load_state_dict(checkpoint['state_dict'])
+    return model
+
+vad_model = silero_vad.load_silero_vad(onnx=False)
+normalizer = ParsNorm()
+model = load_model()
 
 def is_english(text):
     """Returns True if the text contains more than 50% English alphabet characters."""
@@ -108,7 +167,74 @@ def extract_text_from_subtitle(subtitle_file):
         return ""
     return text.strip()
 
-def process_video(videoid, query_phrase, lang):
+def extract_subtitle_text(subtitle_file: str) -> str:
+    if not subtitle_file or not os.path.exists(subtitle_file):
+        return None
+    with open(subtitle_file, 'r', encoding='utf-8') as f:
+        lines = f.readlines()
+    text = " ".join(line.strip() for line in lines[3:] if not line.startswith('WEBVTT') and not line.strip().startswith('0') and line.strip())
+    # remove text between parenthesis
+    text = re.sub(r'\([^)]*\)', '', text)
+    # remove text between square brackets
+    text = re.sub(r'\[[^\]]*\]', '', text)
+    # remove text between asterisks *
+    text = re.sub(r'\*[^*]*\*', '', text)
+    text = normalizer.normalize(text)
+    return text
+
+def download_video(video_id: str):
+    video_url = f"https://www.youtube.com/watch?v={video_id}"
+    os.makedirs('videos', exist_ok=True)
+    output_template = f"videos/{video_id}.%(ext)s"
+    ydl_opts = {
+        'format': 'bestaudio/best',         # Download best audio quality
+        'outtmpl': output_template,
+        'skip_download': False,             # Download the audio
+        'quiet': True,
+        'no_warnings': True,
+    }
+
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(video_url, download=True)
+        audio_file = ydl.prepare_filename(info).replace('.%(ext)s', info['ext'])
+
+        return audio_file
+
+def download_captions(video_id, lang):
+    video_url = f"https://www.youtube.com/watch?v={video_id}"
+    os.makedirs('subtitles', exist_ok=True)
+    output_template = f"subtitles/{video_id}.%(ext)s"
+    if lang == 'fa':
+        lang = ['fa', 'fa-IR']
+    else:
+        lang = [lang]
+
+    ydl_opts = {
+        'outtmpl': output_template,
+        'writesubtitles': True,             # Write manual subtitles
+        'writeautomaticsubs': False,        # Explicitly disable auto-generated subtitles
+        'subtitleslangs': lang,    # Only download Persian subtitles
+        'skip_download': True,             # Download the audio
+        'cookies': 'cookies.txt',
+        'quiet': True,
+        'list_subs': True,
+        'no_warnings': True,
+    }
+
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(video_url, download=True)
+
+        # Look for Persian subtitle file
+        subtitle_file = None
+        for i in lang:
+            potential_file = f"subtitles/{video_id}.{i}.vtt"
+            if os.path.exists(potential_file):
+                subtitle_file = potential_file
+                break
+
+        return subtitle_file, info
+
+def process_video(videoid, query_phrase, lang, processed_channels):
     """Process a single video to get metadata, download Persian subtitles, and analyze punctuation."""
     url = make_video_url(videoid)
     entry = {
@@ -128,24 +254,36 @@ def process_video(videoid, query_phrase, lang):
         "categories": [],
         "like_count": "",
         "punctuation_count": 0,
-        "subtitle_duration": 0  # New field for subtitle duration
+        "subtitle_duration": 0,  # New field for subtitle duration
+        "cer": "",
+        "wer": "",
     }
 
 
     try:
         # First request: Get subtitle info
-        cmd = f"yt-dlp --list-subs --skip-download {url} --cookies cookies.txt"
-        stdout, stderr = run_command(cmd)
-        auto_lang, manu_lang = get_subtitle_language(stdout)
+        subtitle_filename, metadata = download_captions(videoid, lang)
+        manu_lang = list(metadata['subtitles'].keys())
         has_subtitle = lang in manu_lang and len(manu_lang) < 5
         entry["sub"] = str(has_subtitle)
+        try:
+            entry.update({
+                'title': metadata.get('title', ''),
+                'channel': metadata.get('uploader', ''),
+                'channel_id': metadata.get('uploader_id', ''),
+                'channel_url': metadata.get('uploader_url', ''),
+                'channel_follower_count': metadata.get('channel_follower_count', ''),
+                'upload_date': metadata.get('upload_date', ''),
+                'duration': metadata.get('duration', ''),
+                'view_count': metadata.get('view_count', ''),
+                'categories': metadata.get('categories', []),
+                'like_count': metadata.get('like_count', '')
+            })
+        except Exception as e:
+            print(f"Error updating metadata: {e}") 
 
         if has_subtitle:
-            # Download Persian subtitle
-            subtitle_filename = f"subtitles/{videoid}.{lang}.vtt"
-            Path("subtitles").mkdir(exist_ok=True)
-            download_cmd = f"yt-dlp --skip-download --sub-lang {lang} --write-sub --convert-subs vtt --cookies cookies.txt -o 'subtitles/%(id)s' {url}"
-            stdout, stderr = run_command(download_cmd)
+            print(f"Downloaded subtitle for video {videoid} to {subtitle_filename}")
 
             # Extract text and count punctuations
             if Path(subtitle_filename).exists():
@@ -156,27 +294,20 @@ def process_video(videoid, query_phrase, lang):
                 # Calculate total subtitle duration
                 subtitle_duration = calculate_subtitle_duration(subtitle_filename)
                 entry["subtitle_duration"] = round(subtitle_duration, 2)  # Round to 2 decimal places
-                if entry["subtitle_duration"] > 10 and punct_count > 5 and not is_english(subtitle_text):
-                    entry["good_sub"] = str(True)
-                    # Get metadata
-                    metadata_cmd = f"yt-dlp -j {url} --cookies cookies.txt"
-                    stdout, stderr = run_command(metadata_cmd)
-                    try:
-                        metadata = json.loads(stdout)
-                        entry.update({
-                            'title': metadata.get('title', ''),
-                            'channel': metadata.get('uploader', ''),
-                            'channel_id': metadata.get('uploader_id', ''),
-                            'channel_url': metadata.get('uploader_url', ''),
-                            'channel_follower_count': metadata.get('channel_follower_count', ''),
-                            'upload_date': metadata.get('upload_date', ''),
-                            'duration': metadata.get('duration', ''),
-                            'view_count': metadata.get('view_count', ''),
-                            'categories': metadata.get('categories', []),
-                            'like_count': metadata.get('like_count', '')
-                        })
-                    except json.JSONDecodeError as e:
-                        print(f"Error parsing metadata JSON for {videoid}. stdout: {stdout[:100]}...")
+                if entry["subtitle_duration"] > 10 and punct_count > 5 and not is_english(subtitle_text) and metadata.get('channel_id') not in processed_channels:
+                    # entry["good_sub"] = str(True)
+                    print(f"Downloading and processing audio for video {videoid}")
+                    print(url)
+                    audio_file = download_video(videoid)
+                    auto_transcription = transcribe_audio(audio_file, model, vad_model)
+                    manual_transcription = extract_subtitle_text(subtitle_filename)
+                    word_error_rate = wer(manual_transcription, auto_transcription)
+                    character_error_rate = cer(manual_transcription, auto_transcription)
+                    entry["wer"] = word_error_rate
+                    entry["cer"] = character_error_rate
+                    if word_error_rate < 0.8 and character_error_rate < 0.2:
+                        entry["good_sub"] = str(True)
+
 
     except subprocess.CalledProcessError as e:
         print(f"Error processing video {videoid}. stdout: {e.stdout}, stderr: {e.stderr}")
@@ -192,12 +323,14 @@ def retrieve_subtitle_exists(lang, fn_videoid, outdir="sub", wait_sec=0.2, fn_ch
     # Load checkpoint if provided
     subtitle_exists = []
     processed_videoids = set()
+    processed_channels = set()
     if fn_checkpoint and Path(fn_checkpoint).exists():
         with open(fn_checkpoint, "r") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 subtitle_exists.append(row)
                 processed_videoids.add(row["videoid"])
+                processed_channels.add(row["channel_id"])
 
     # Load video ID list
     video_ids = []
@@ -212,6 +345,7 @@ def retrieve_subtitle_exists(lang, fn_videoid, outdir="sub", wait_sec=0.2, fn_ch
                   "query_phrase",
                  "channel", "channel_id", "channel_url",
                  "punctuation_count", "subtitle_duration",
+                 "wer", "cer",
                  "channel_follower_count", "upload_date", "duration", 
                  "view_count", "categories", "like_count", "subtitle_coverage"]
 
@@ -221,7 +355,7 @@ def retrieve_subtitle_exists(lang, fn_videoid, outdir="sub", wait_sec=0.2, fn_ch
         if videoid in processed_videoids:
             continue
 
-        entry = process_video(videoid, query_phrase, lang)
+        entry = process_video(videoid, query_phrase, lang, processed_channels)
         subtitle_exists.append(entry)
 
         if wait_sec > 0.01:
