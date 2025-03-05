@@ -82,6 +82,8 @@ def transcribe_audio(file_path, model, vad_model):
     for chunk in chunks:
         transcription = transcribe_chunk(chunk, model)
         transcriptions.append(transcription)
+    transcriptions = re.sub(' +', ' ', transcriptions)
+    transcriptions = normalizer.normalize(transcriptions)
     return ' '.join(transcriptions)
 
 def load_model(model_path:str="/content/drive/MyDrive/stt_fa_fastconformer_hybrid_large_dataset_v30.nemo"):
@@ -301,9 +303,7 @@ def process_video(videoid, query_phrase, lang, processed_channels):
                     print(url)
                     audio_file = download_video(videoid)
                     auto_transcription = transcribe_audio(audio_file, model, vad_model)
-                    auto_transcription = re.sub(' +', ' ', auto_transcription)
                     manual_transcription = extract_subtitle_text(subtitle_filename)
-                    manual_transcription = re.sub(' +', ' ', manual_transcription)
                     word_error_rate = wer(manual_transcription, auto_transcription)
                     character_error_rate = cer(manual_transcription, auto_transcription)
                     entry["wer"] = word_error_rate
