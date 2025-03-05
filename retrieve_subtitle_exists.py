@@ -71,6 +71,14 @@ def segment_audio_with_vad(file_path, vad_model):
 
     return speech_segments
 
+def load_model(model_path:str="/content/drive/MyDrive/stt_fa_fastconformer_hybrid_large_dataset_v30.nemo"):
+    model = ASRModel.restore_from(restore_path=model_path)
+    return model
+
+vad_model = silero_vad.load_silero_vad(onnx=False)
+normalizer = ParsNorm()
+model = load_model()
+
 def transcribe_chunk(chunk, model):
     transcription = model.transcribe([chunk], batch_size=1, verbose=False)
     return transcription[1][0]
@@ -82,17 +90,12 @@ def transcribe_audio(file_path, model, vad_model):
     for chunk in chunks:
         transcription = transcribe_chunk(chunk, model)
         transcriptions.append(transcription)
+    transcriptions = ' '.join(transcriptions)
     transcriptions = re.sub(' +', ' ', transcriptions)
     transcriptions = normalizer.normalize(transcriptions)
-    return ' '.join(transcriptions)
+    return transcriptions
 
-def load_model(model_path:str="/content/drive/MyDrive/stt_fa_fastconformer_hybrid_large_dataset_v30.nemo"):
-    model = ASRModel.restore_from(restore_path=model_path)
-    return model
 
-vad_model = silero_vad.load_silero_vad(onnx=False)
-normalizer = ParsNorm()
-model = load_model()
 
 def is_english(text):
     """Returns True if the text contains more than 50% English alphabet characters."""
@@ -236,7 +239,7 @@ def download_captions(video_id, lang):
 
         return subtitle_file, info
 
-def process_video(videoid, query_phrase, lang, processed_channels):
+def process_video(videoid, query_phrase, lang):
     """Process a single video to get metadata, download Persian subtitles, and analyze punctuation."""
     url = make_video_url(videoid)
     entry = {
@@ -326,14 +329,12 @@ def retrieve_subtitle_exists(lang, fn_videoid, outdir="sub", wait_sec=0.2, fn_ch
     # Load checkpoint if provided
     subtitle_exists = []
     processed_videoids = set()
-    processed_channels = set()
     if fn_checkpoint and Path(fn_checkpoint).exists():
         with open(fn_checkpoint, "r") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 subtitle_exists.append(row)
                 processed_videoids.add(row["videoid"])
-                processed_channels.add(row["channel_id"])
 
     # Load video ID list
     video_ids = []
@@ -358,7 +359,7 @@ def retrieve_subtitle_exists(lang, fn_videoid, outdir="sub", wait_sec=0.2, fn_ch
         if videoid in processed_videoids:
             continue
 
-        entry = process_video(videoid, query_phrase, lang, processed_channels)
+        entry = process_video(videoid, query_phrase, lang)
         subtitle_exists.append(entry)
 
         if wait_sec > 0.01:
