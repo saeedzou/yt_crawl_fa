@@ -274,9 +274,9 @@ def process_video(videoid, query_phrase, lang):
         try:
             entry.update({
                 'title': metadata.get('title', ''),
-                'channel': metadata.get('uploader', ''),
-                'channel_id': metadata.get('uploader_id', ''),
-                'channel_url': metadata.get('uploader_url', ''),
+                'channel': metadata.get('channel', ''),
+                'channel_id': metadata.get('channel_id', ''),
+                'channel_url': metadata.get('channel_url', ''),
                 'channel_follower_count': metadata.get('channel_follower_count', ''),
                 'upload_date': metadata.get('upload_date', ''),
                 'duration': metadata.get('duration', ''),
