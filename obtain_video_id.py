@@ -16,8 +16,6 @@ def parse_args():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("wordlist", type=str, help="filename of word list")
-    parser.add_argument("--batch_size", type=int, default=200000, help="Number of key words to search")
-    parser.add_argument("--batch_number", type=int, default=0, help="Batch number")
     parser.add_argument("--outdir", type=str, default="videoid", help="dirname to save video IDs")
     parser.add_argument("--processes", type=int, default=cpu_count(), help="Number of parallel processes to use")
     return parser.parse_args(sys.argv[1:])
@@ -37,12 +35,12 @@ def process_word(word):
         return word, []
 
 
-def obtain_video_id(fn_word, outdir, batch_size, batch_number, processes):
+def obtain_video_id(fn_word, outdir, processes):
     fn_videoid = Path(outdir) / f"{Path(fn_word).stem}.csv"
     fn_videoid.parent.mkdir(parents=True, exist_ok=True)
 
     # Read the word list and slice the batch
-    words = list(open(fn_word, "r").readlines())[batch_number * batch_size: (batch_number + 1) * batch_size]
+    words = list(open(fn_word, "r").readlines())
     words = [word.strip() for word in words]
 
     # Open the output CSV file
@@ -69,8 +67,6 @@ if __name__ == "__main__":
     filename = obtain_video_id(
         args.wordlist,
         args.outdir,
-        args.batch_size,
-        args.batch_number,
         args.processes
     )
     print(f"Saved video IDs to {filename}.")
