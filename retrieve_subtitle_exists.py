@@ -776,6 +776,7 @@ def process_video(videoid, query_phrase, lang, excluded_channel_ids=EXCLUDED_CHA
                 'like_count': metadata.get('like_count', '')
             })
             if metadata.get('channel_id') in excluded_channel_ids:
+                print(f"Video {videoid} belongs to channel {metadata.get('channel', '')} - {metadata.get('channel_url', '')}")
                 return entry
         except Exception as e:
             print(f"Error updating metadata: {e}") 
