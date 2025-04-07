@@ -11,7 +11,6 @@ import subprocess
 import string
 import re
 import librosa
-import silero_vad
 import numpy as np
 from pathlib import Path
 from jiwer import wer, cer
@@ -526,52 +525,48 @@ def load_audio(file_path):
 
     return waveform, sample_rate
 
-def segment_audio_with_vad(file_path, vad_model):
-    waveform, sample_rate = load_audio(file_path)
-
-    # Get speech timestamps
-    speech_timestamps = silero_vad.get_speech_timestamps(
-        waveform,
-        vad_model,
-        sampling_rate=sample_rate,
-        min_speech_duration_ms=250,  # Minimum speech duration in ms
-        min_silence_duration_ms=100  # Minimum silence duration in ms
-    )
-
-    # Extract speech segments
-    speech_segments = []
-    for segment in speech_timestamps:
-        start = segment['start']
-        end = segment['end']
-        speech_segment = waveform[start:end]
-        speech_segments.append(speech_segment)
-
-    return speech_segments
-
 def load_model(model_path:str="/content/drive/MyDrive/stt_fa_fastconformer_hybrid_large_dataset_v30.nemo"):
     model = ASRModel.restore_from(restore_path=model_path)
     return model
 
-vad_model = silero_vad.load_silero_vad(onnx=False)
 normalizer = ParsNorm()
 model = load_model()
 
-def transcribe_chunk(chunk, model):
-    transcription = model.transcribe([chunk], batch_size=1, verbose=False)
-    return transcription[1][0]
+def transcribe_chunk(audio_chunk, model):
+    transcription = model.transcribe([audio_chunk], batch_size=1, verbose=False)
+    return transcription[0].text
 
-def transcribe_audio(file_path, model, vad_model):
-    # chunks = chunk_audio(file_path)
-    chunks = segment_audio_with_vad(file_path, vad_model)
+def transcribe_audio(file_path, model, chunk_size=30*16000):
+    waveform, _ = load_audio(file_path)
     transcriptions = []
-    for chunk in chunks:
-        transcription = transcribe_chunk(chunk, model)
+    for start in range(0, len(waveform), chunk_size):
+        end = min(len(waveform), start + chunk_size)
+        transcription = transcribe_chunk(waveform[start:end], model)
         transcriptions.append(transcription)
-    transcriptions = ' '.join(transcriptions)
-    transcriptions = re.sub(' +', ' ', transcriptions)
-    transcriptions = normalizer.normalize(transcriptions)
-    return transcriptions
 
+    # Combine all transcriptions and normalize the final result
+    final_transcription = ' '.join(transcriptions)
+    final_transcription = re.sub(' +', ' ', final_transcription)
+    final_transcription = normalizer.normalize(final_transcription)
+    
+    return final_transcription
+
+def load_audio(file_path):
+    waveform, sample_rate = librosa.load(file_path, sr=16000)
+    # convert to mono
+    waveform = librosa.to_mono(waveform)
+    # Normalize and convert to float32
+    if waveform.dtype == 'int16':
+        waveform = waveform.astype('float32') / 32768.0
+    elif waveform.dtype == 'int32':
+        waveform = waveform.astype('float32') / 2147483648.0
+    elif waveform.dtype == 'uint8':
+        waveform = (waveform.astype('float32') - 128) / 128.0
+    else:
+        # If already float32, ensure no further normalization is done
+        waveform = waveform.astype('float32')
+
+    return waveform, sample_rate
 
 
 def is_english(text):
@@ -803,7 +798,7 @@ def process_video(videoid, query_phrase, lang, excluded_channel_ids=EXCLUDED_CHA
                     print(f"Downloading and processing audio for video {videoid}")
                     print(url)
                     audio_file = download_video(videoid)
-                    auto_transcription = transcribe_audio(audio_file, model, vad_model)
+                    auto_transcription = transcribe_audio(audio_file, model)
                     manual_transcription = extract_subtitle_text(subtitle_filename)
                     word_error_rate = wer(manual_transcription, auto_transcription)
                     character_error_rate = cer(manual_transcription, auto_transcription)
