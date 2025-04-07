@@ -18,6 +18,7 @@ from parsnorm import ParsNorm
 from util import make_video_url
 from nemo.collections.asr.models import ASRModel
 from tqdm import tqdm
+BOT_ERRORS = 0
 
 EXCLUDED_CHANNEL_IDS = ['UCJEJkoZVLfBCbxWSC8XmIMA',
  'UCxWhvRqBPnYAFe9ULG4xWOQ',
@@ -618,7 +619,7 @@ def calculate_subtitle_duration(subtitle_file):
                     duration = end_time - start_time
                     total_duration += duration
     except Exception as e:
-        print(f"Error calculating subtitle duration: {e}")
+        print(f"❌Error calculating subtitle duration: {e}")
         return 0
     return total_duration
 
@@ -640,7 +641,7 @@ def extract_text_from_subtitle(subtitle_file):
                 if line.strip():
                     text += line.strip() + " "
     except Exception as e:
-        print(f"Error reading subtitle file: {e}")
+        print(f"❌Error reading subtitle file: {e}")
         return ""
     return text.strip()
 
@@ -776,13 +777,13 @@ def process_video(videoid, query_phrase, lang, excluded_channel_ids=EXCLUDED_CHA
                 'like_count': metadata.get('like_count', '')
             })
             if metadata.get('channel_id') in excluded_channel_ids:
-                print(f"Video {videoid} belongs to channel {metadata.get('channel', '')} - {metadata.get('channel_url', '')}")
+                print(f"❕ Video {videoid} belongs to channel {metadata.get('channel', '')} - {metadata.get('channel_url', '')}")
                 return entry
         except Exception as e:
-            print(f"Error updating metadata: {e}") 
+            print(f"❌ Error updating metadata: {e}") 
 
         if has_subtitle:
-            print(f"Downloaded subtitle for video {videoid} to {subtitle_filename}")
+            print(f"❕ Downloaded subtitle for video {videoid} to {subtitle_filename}")
 
             # Extract text and count punctuations
             if Path(subtitle_filename).exists():
@@ -796,7 +797,7 @@ def process_video(videoid, query_phrase, lang, excluded_channel_ids=EXCLUDED_CHA
                 subtitle_duration = calculate_subtitle_duration(subtitle_filename)
                 entry["subtitle_duration"] = round(subtitle_duration, 2)  # Round to 2 decimal places
                 if (entry["subtitle_duration"] > 10) and (not is_english(subtitle_text)) and (common_punct > 5 or other_punct > 1):
-                    print(f"Downloading and processing audio for video {videoid}")
+                    print(f"❕ Downloading and processing audio for video {videoid}")
                     print(url)
                     audio_file = download_video(videoid)
                     auto_transcription = transcribe_audio(audio_file, model)
@@ -810,9 +811,14 @@ def process_video(videoid, query_phrase, lang, excluded_channel_ids=EXCLUDED_CHA
 
 
     except subprocess.CalledProcessError as e:
-        print(f"Error processing video {videoid}. stdout: {e.stdout}, stderr: {e.stderr}")
+        print(f"❌ Error processing video {videoid}. stdout: {e.stdout}, stderr: {e.stderr}")
     except Exception as e:
         print(f"Unexpected error processing video {videoid}: {str(e)}")
+        if "Sign in to confirm you’re not a bot" in str(e):
+            if BOT_ERRORS > 3:
+                print("❌ Too many bot errors, exiting.")
+                exit(1)
+            BOT_ERRORS +=1
 
     return entry
 
