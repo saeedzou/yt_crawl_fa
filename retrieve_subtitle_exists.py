@@ -18,7 +18,6 @@ from parsnorm import ParsNorm
 from util import make_video_url
 from nemo.collections.asr.models import ASRModel
 from tqdm import tqdm
-BOT_ERRORS = 0
 
 EXCLUDED_CHANNEL_IDS = ['UCJEJkoZVLfBCbxWSC8XmIMA',
  'UCxWhvRqBPnYAFe9ULG4xWOQ',
@@ -728,6 +727,8 @@ def download_captions(video_id, lang):
                 break
 
         return subtitle_file, info
+
+BOT_ERRORS = 0
 
 def process_video(videoid, query_phrase, lang, excluded_channel_ids=EXCLUDED_CHANNEL_IDS):
     """Process a single video to get metadata, download Persian subtitles, and analyze punctuation."""
