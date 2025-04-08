@@ -728,8 +728,6 @@ def download_captions(video_id, lang):
 
         return subtitle_file, info
 
-BOT_ERRORS = 0
-
 def process_video(videoid, query_phrase, lang, excluded_channel_ids=EXCLUDED_CHANNEL_IDS):
     """Process a single video to get metadata, download Persian subtitles, and analyze punctuation."""
     url = make_video_url(videoid)
@@ -816,10 +814,8 @@ def process_video(videoid, query_phrase, lang, excluded_channel_ids=EXCLUDED_CHA
     except Exception as e:
         print(f"Unexpected error processing video {videoid}: {str(e)}")
         if "Sign in to confirm you’re not a bot" in str(e):
-            if BOT_ERRORS > 3:
-                print("❌ Too many bot errors, exiting.")
-                exit(1)
-            BOT_ERRORS +=1
+            print("❌ Too many bot errors, exiting.")
+            exit(1)
 
     return entry
 
