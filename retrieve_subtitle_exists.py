@@ -541,6 +541,8 @@ def transcribe_audio(file_path, model, chunk_size=30*16000):
     transcriptions = []
     for start in range(0, len(waveform), chunk_size):
         end = min(len(waveform), start + chunk_size)
+        if end - start < 512:
+            continue
         transcription = transcribe_chunk(waveform[start:end], model)
         transcriptions.append(transcription)
 
