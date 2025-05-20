@@ -880,7 +880,7 @@ def retrieve_subtitle_exists(lang, fn_videoid, outdir="sub", wait_sec=0.2, fn_ch
             time.sleep(wait_sec)
 
         # Write current result every 2 videos
-        if len(subtitle_exists) % 2 == 0:
+        if len(subtitle_exists) % 50 == 0:
             with open(fn_sub, "w", newline="", encoding='utf-8') as f:
                 writer = csv.DictWriter(f, fieldnames=fieldnames)
                 writer.writeheader()
